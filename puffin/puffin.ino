@@ -5,7 +5,8 @@
  *   1. Chassis drives forward. If the IR distance sensor sees something too
  *      close, the wheels stop and the wings flap ("shake hands"). Once the path
  *      has been clear for a moment, the wings go down and the puffin drives again.
- *   2. While the button is held, the beak servo opens. Released -> beak closes.
+ *   2. Each button press opens the beak for 3 seconds, then it closes.
+ *      Pressing again while it's open restarts the 3 seconds.
  *   3. When the photoresistor reads dark, the beak LED turns on.
  *
  * Drive logic is a small state machine (DRIVING / GREETING). The beak and LED
@@ -76,6 +77,7 @@ const unsigned long FLAP_INTERVAL_MS = 300;
 // Beak servo angles
 const int BEAK_CLOSED = 10;
 const int BEAK_OPEN   = 70;
+const unsigned long BEAK_OPEN_MS = 3000;   // how long the beak stays open per press
 
 const unsigned long DEBOUNCE_MS = 30;
 
@@ -97,10 +99,14 @@ bool wingIsUp = false;
 bool buttonStable = HIGH;            // debounced reading (HIGH = not pressed with pullup)
 bool buttonLastRaw = HIGH;
 unsigned long buttonChangedAt = 0;
+bool buttonWasPressed = false;       // last loop's debounced state, to catch new presses
+
+bool beakIsOpen = false;
+unsigned long beakOpenedAt = 0;
 
 bool ledOn = false;
 
-// ---------------- Motor helpers ----------------
+// Motor Helpers
 void driveForward() {
   if (wheelsMoving) return;
   wheelsMoving = true;
@@ -180,7 +186,20 @@ void updateDrive(unsigned long now, int ir) {
 }
 
 void updateBeak(unsigned long now) {
-  beak.write(buttonPressed(now) ? BEAK_OPEN : BEAK_CLOSED);
+  bool pressed = buttonPressed(now);
+  if (pressed && !buttonWasPressed) {        // new press (not held)
+    beakOpenedAt = now;
+    if (!beakIsOpen) {
+      beakIsOpen = true;
+      beak.write(BEAK_OPEN);
+    }
+  }
+  buttonWasPressed = pressed;
+
+  if (beakIsOpen && now - beakOpenedAt >= BEAK_OPEN_MS) {
+    beakIsOpen = false;
+    beak.write(BEAK_CLOSED);
+  }
 }
 
 void updateLED(int light) {
