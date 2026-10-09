@@ -12,9 +12,9 @@
  * run independently every loop, so they work in either state.
  * Everything is non-blocking (millis(), no delay()) so all sensors stay live.
  *
- * Wiring (Arduino Uno) - change the pin constants below to match your build:
- *   Left wheel servo  (continuous) signal -> D9
- *   Right wheel servo (continuous) signal -> D10
+ * Wiring (Arduino Uno + Adafruit Motor Shield v2) - change the constants below to match your build:
+ *   Left wheel DC motor                   -> shield M1 terminals
+ *   Right wheel DC motor                  -> shield M3 terminals
  *   Wing servo        (positional) signal -> D5
  *   Beak servo        (positional) signal -> D6
  *   IR distance sensor (analog out)       -> A0
@@ -22,16 +22,24 @@
  *   Button                                -> D2 and GND (uses INPUT_PULLUP)
  *   LED (+ ~220 ohm resistor)             -> D4
  *
+ * The shield talks to the Uno over I2C (A4/A5), so leave those pins free.
+ * Power the DC motors through the shield's motor power terminal block (remove
+ * the VIN jumper if that supply is separate from the Arduino's).
+ *
  * Power servos from a separate 5-6V supply (NOT the Arduino 5V pin) and tie
  * that supply's GND to Arduino GND. A 100-470uF capacitor across the servo
  * supply helps with brownouts/jitter when several servos move at once.
+ *
+ * Requires the "Adafruit Motor Shield V2 Library" (Arduino Library Manager).
  */
 
 #include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
 
 // ---------------- Pins ----------------
-const int PIN_LEFT_WHEEL  = 9;
-const int PIN_RIGHT_WHEEL = 10;
+const int MOTOR_LEFT      = 1;       // shield port M1
+const int MOTOR_RIGHT     = 3;       // shield port M3
 const int PIN_WING        = 5;
 const int PIN_BEAK        = 6;
 const int PIN_IR          = A0;
@@ -53,11 +61,12 @@ const unsigned long CLEAR_TIME_MS = 1000;  // path must be clear this long befor
 const int LIGHT_DARK   = 300;        // LED on below this
 const int LIGHT_BRIGHT = 380;        // LED off above this
 
-// Continuous-rotation wheel servos: 90 = stop, 0/180 = full speed each way.
-// If a wheel creeps at "stop", adjust its STOP value (e.g. 88 or 92) or the servo's trim pot.
-const int LEFT_STOP  = 90;
-const int RIGHT_STOP = 90;
-const int DRIVE_SPEED = 30;          // offset from stop (0-90); start slow
+// DC wheel motors: speed 0-255. Start slow and raise once it drives straight.
+// Wheels are mounted mirrored, so one spins "backward" to go forward.
+// If the robot spins in place or drives backward, swap FORWARD/BACKWARD here.
+const int DRIVE_SPEED = 120;
+const uint8_t LEFT_FORWARD  = FORWARD;
+const uint8_t RIGHT_FORWARD = BACKWARD;
 
 // Wing servo angles + flap speed
 const int WING_DOWN = 20;
@@ -74,7 +83,12 @@ const unsigned long DEBOUNCE_MS = 30;
 enum DriveState { DRIVING, GREETING };
 DriveState driveState = DRIVING;
 
-Servo leftWheel, rightWheel, wing, beak;
+Adafruit_MotorShield AFMS = Adafruit_MotorShield();
+Adafruit_DCMotor *leftWheel  = AFMS.getMotor(MOTOR_LEFT);
+Adafruit_DCMotor *rightWheel = AFMS.getMotor(MOTOR_RIGHT);
+Servo wing, beak;
+
+bool wheelsMoving = false;           // so we only send I2C commands when it changes
 
 unsigned long clearSince = 0;        // when the IR path last became clear
 unsigned long lastFlap = 0;
@@ -88,15 +102,19 @@ bool ledOn = false;
 
 // ---------------- Motor helpers ----------------
 void driveForward() {
-  // Wheels are mounted mirrored, so one spins "backward" to go forward.
-  // If the robot spins in place or drives backward, swap the + / - here.
-  leftWheel.write(LEFT_STOP + DRIVE_SPEED);
-  rightWheel.write(RIGHT_STOP - DRIVE_SPEED);
+  if (wheelsMoving) return;
+  wheelsMoving = true;
+  leftWheel->setSpeed(DRIVE_SPEED);
+  rightWheel->setSpeed(DRIVE_SPEED);
+  leftWheel->run(LEFT_FORWARD);
+  rightWheel->run(RIGHT_FORWARD);
 }
 
 void stopWheels() {
-  leftWheel.write(LEFT_STOP);
-  rightWheel.write(RIGHT_STOP);
+  if (!wheelsMoving) return;
+  wheelsMoving = false;
+  leftWheel->run(RELEASE);
+  rightWheel->run(RELEASE);
 }
 
 void flapWings(unsigned long now) {
@@ -176,16 +194,21 @@ void setup() {
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   pinMode(PIN_LED, OUTPUT);
 
-  leftWheel.attach(PIN_LEFT_WHEEL);
-  rightWheel.attach(PIN_RIGHT_WHEEL);
+  if (DEBUG) Serial.begin(9600);
+
+  if (!AFMS.begin()) {               // default I2C address 0x60
+    if (DEBUG) Serial.println("Motor shield not found - check that it's seated.");
+    while (true) {}
+  }
+
   wing.attach(PIN_WING);
   beak.attach(PIN_BEAK);
 
+  wheelsMoving = true;               // force stopWheels() to send the command
   stopWheels();
   wingsDown();
   beak.write(BEAK_CLOSED);
 
-  if (DEBUG) Serial.begin(9600);
   delay(1000);                       // give servos time to settle before moving
 }
 

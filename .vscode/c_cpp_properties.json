@@ -11,7 +11,7 @@
                 "${arduinoAvr}/cores/arduino",
                 "${arduinoAvr}/variants/standard",
                 "${arduinoAvr}/libraries/**",
-                "C:/Users/lagis/Documents/Arduino/libraries/Servo/src",
+                "C:/Users/lagis/Documents/Arduino/libraries/**",
                 "${avrGcc}/avr/include",
                 "${avrGcc}/lib/gcc/avr/7.3.0/include"
             ],
