@@ -69,10 +69,14 @@ const int DRIVE_SPEED = 120;
 const uint8_t LEFT_FORWARD  = FORWARD;
 const uint8_t RIGHT_FORWARD = BACKWARD;
 
-// Wing servo angles + flap speed
-const int WING_DOWN = 20;
-const int WING_UP   = 110;
-const unsigned long FLAP_INTERVAL_MS = 300;
+// Wing servo angles + flap speed.
+// The wing moves WING_STEP_DEG every WING_STEP_MS, so one sweep from down to up
+// takes (WING_UP - WING_DOWN) / WING_STEP_DEG * WING_STEP_MS ms (~900 ms here).
+// Raise WING_STEP_MS (or lower WING_STEP_DEG) to flap slower.
+const int WING_DOWN = 40;           // resting position (slightly outward)
+const int WING_UP   = 130;          // furthest outward point of a flap
+const int WING_STEP_DEG = 2;
+const unsigned long WING_STEP_MS = 20;
 
 // Beak servo angles
 const int BEAK_CLOSED = 10;
@@ -93,8 +97,9 @@ Servo wing, beak;
 bool wheelsMoving = false;           // so we only send I2C commands when it changes
 
 unsigned long clearSince = 0;        // when the IR path last became clear
-unsigned long lastFlap = 0;
-bool wingIsUp = false;
+int wingPos = WING_DOWN;             // angle last sent to the wing servo
+int wingTarget = WING_DOWN;          // angle the wing is currently sweeping toward
+unsigned long lastWingStep = 0;
 
 bool buttonStable = HIGH;            // debounced reading (HIGH = not pressed with pullup)
 bool buttonLastRaw = HIGH;
@@ -123,17 +128,25 @@ void stopWheels() {
   rightWheel->run(RELEASE);
 }
 
-void flapWings(unsigned long now) {
-  if (now - lastFlap >= FLAP_INTERVAL_MS) {
-    lastFlap = now;
-    wingIsUp = !wingIsUp;
-    wing.write(wingIsUp ? WING_UP : WING_DOWN);
+// Once the wing reaches the end of a sweep, head back the other way.
+void flapWings() {
+  if (wingPos == wingTarget) {
+    wingTarget = (wingTarget == WING_UP) ? WING_DOWN : WING_UP;
   }
 }
 
+// Glide the wing back down (updateWing() does the actual movement).
 void wingsDown() {
-  wingIsUp = false;
-  wing.write(WING_DOWN);
+  wingTarget = WING_DOWN;
+}
+
+// Step the wing servo a few degrees toward wingTarget. Called every loop.
+void updateWing(unsigned long now) {
+  if (wingPos == wingTarget || now - lastWingStep < WING_STEP_MS) return;
+  lastWingStep = now;
+  if (wingPos < wingTarget) wingPos = min(wingPos + WING_STEP_DEG, wingTarget);
+  else                      wingPos = max(wingPos - WING_STEP_DEG, wingTarget);
+  wing.write(wingPos);
 }
 
 // ---------------- Sensor helpers ----------------
@@ -165,13 +178,13 @@ void updateDrive(unsigned long now, int ir) {
         stopWheels();
         driveState = GREETING;
         clearSince = 0;
-        lastFlap = now - FLAP_INTERVAL_MS;   // flap immediately
+        wingTarget = WING_UP;                // start flapping right away
       }
       break;
 
     case GREETING:
       stopWheels();
-      flapWings(now);
+      flapWings();
       if (ir < IR_CLEAR) {
         if (clearSince == 0) clearSince = now;
         if (now - clearSince >= CLEAR_TIME_MS) {
@@ -225,7 +238,7 @@ void setup() {
 
   wheelsMoving = true;               // force stopWheels() to send the command
   stopWheels();
-  wingsDown();
+  wing.write(WING_DOWN);             // wingPos/wingTarget already start at WING_DOWN
   beak.write(BEAK_CLOSED);
 
   delay(1000);                       // give servos time to settle before moving
@@ -237,6 +250,7 @@ void loop() {
   int light = analogRead(PIN_LIGHT);
 
   updateDrive(now, ir);
+  updateWing(now);
   updateBeak(now);
   updateLED(light);
 
@@ -246,6 +260,7 @@ void loop() {
       lastPrint = now;
       Serial.print("IR: ");       Serial.print(ir);
       Serial.print("  Light: ");  Serial.print(light);
+      Serial.print(" ("); Serial.print(light * 5.0 / 1023, 2); Serial.print("V)");
       Serial.print("  Button: "); Serial.print(buttonStable == LOW ? "PRESSED" : "-");
       Serial.print("  State: ");  Serial.println(driveState == DRIVING ? "DRIVING" : "GREETING");
     }

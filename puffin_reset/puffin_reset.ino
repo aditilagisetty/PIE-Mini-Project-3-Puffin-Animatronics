@@ -28,7 +28,7 @@ const int PIN_BEAK    = 6;
 const int PIN_LED     = 4;
 
 // ---------------- Initial positions ----------------
-const int WING_DOWN   = 20;
+const int WING_DOWN   = 40;
 const int BEAK_CLOSED = 10;
 
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
