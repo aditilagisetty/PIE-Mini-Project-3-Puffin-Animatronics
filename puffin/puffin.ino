@@ -76,7 +76,7 @@ const uint8_t RIGHT_FORWARD = BACKWARD;
 // takes (WING_UP - WING_DOWN) / WING_STEP_DEG * WING_STEP_MS ms (~900 ms here).
 // Raise WING_STEP_MS (or lower WING_STEP_DEG) to flap slower.
 const int WING_DOWN = 40;           // resting position (slightly outward)
-const int WING_UP   = 80;          // furthest outward point of a flap
+const int WING_UP   = 10;          // furthest outward point of a flap
 const int WING_STEP_DEG = 2;
 const unsigned long WING_STEP_MS = 20;
 
