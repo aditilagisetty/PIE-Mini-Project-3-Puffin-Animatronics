@@ -39,7 +39,7 @@
 #include <Adafruit_MotorShield.h>
 
 // ---------------- Pins ----------------
-const int MOTOR_LEFT      = 1;       // shield port M1
+const int MOTOR_LEFT      = 4;       // shield port M1
 const int MOTOR_RIGHT     = 3;       // shield port M3
 const int PIN_WING        = 5;
 const int PIN_BEAK        = 6;
@@ -54,13 +54,15 @@ const bool DEBUG = true;
 
 // IR sensor (Sharp-style analog: HIGHER reading = CLOSER object).
 // Two thresholds (hysteresis) so it doesn't flicker at the boundary.
-const int IR_TOO_CLOSE = 400;        // stop when reading goes above this
-const int IR_CLEAR     = 320;        // considered clear when below this
+// Values from calibration/ir_calibration.py: 20 cm reads ~476, 30 cm ~399, 40 cm ~332.
+const int IR_TOO_CLOSE = 470;        // stop when reading goes above this (~20 cm)
+const int IR_CLEAR     = 369;        // considered clear when below this (~35 cm)
 const unsigned long CLEAR_TIME_MS = 1000;  // path must be clear this long before driving again
 
 // Photoresistor (with LDR to 5V, 10k to GND: LOWER reading = DARKER).
-const int LIGHT_DARK   = 300;        // LED on below this
-const int LIGHT_BRIGHT = 380;        // LED off above this
+// Values from calibration/light_calibration.py: covered ~369, shaded ~690, room ~811.
+const int LIGHT_DARK   = 745;        // LED on below this (shaded or darker)
+const int LIGHT_BRIGHT = 765;        // LED off above this (room light)
 
 // DC wheel motors: speed 0-255. Start slow and raise once it drives straight.
 // Wheels are mounted mirrored, so one spins "backward" to go forward.
@@ -74,13 +76,13 @@ const uint8_t RIGHT_FORWARD = BACKWARD;
 // takes (WING_UP - WING_DOWN) / WING_STEP_DEG * WING_STEP_MS ms (~900 ms here).
 // Raise WING_STEP_MS (or lower WING_STEP_DEG) to flap slower.
 const int WING_DOWN = 40;           // resting position (slightly outward)
-const int WING_UP   = 130;          // furthest outward point of a flap
+const int WING_UP   = 80;          // furthest outward point of a flap
 const int WING_STEP_DEG = 2;
 const unsigned long WING_STEP_MS = 20;
 
 // Beak servo angles
 const int BEAK_CLOSED = 10;
-const int BEAK_OPEN   = 70;
+const int BEAK_OPEN   = 15;
 const unsigned long BEAK_OPEN_MS = 3000;   // how long the beak stays open per press
 
 const unsigned long DEBOUNCE_MS = 30;

@@ -21,7 +21,7 @@
 #include <Adafruit_MotorShield.h>
 
 // ---------------- Pins ----------------
-const int MOTOR_LEFT  = 1;           // shield port M1
+const int MOTOR_LEFT  = 4;           // shield port M1
 const int MOTOR_RIGHT = 3;           // shield port M3
 const int PIN_WING    = 5;
 const int PIN_BEAK    = 6;
